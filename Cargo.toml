@@ -1,0 +1,16 @@
+[package]
+name = "openstratos-rs"
+version = "0.1.0"
+authors = ["Razican <razican@protonmail.ch>"]
+
+[features]
+default = ["power-off"]
+power-off = []
+debug = []
+sim = []
+real-sim = []
+
+[dependencies]
+time = "0.1"
+log = "0.3"
+fern = "0.3"
