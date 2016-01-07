@@ -1,6 +1,6 @@
 [root]
-name = "openstratos-rs"
-version = "0.1.0"
+name = "openstratos"
+version = "2.0.0-dev"
 dependencies = [
  "fern 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",

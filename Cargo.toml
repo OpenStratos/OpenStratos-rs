@@ -1,6 +1,6 @@
 [package]
-name = "openstratos-rs"
-version = "0.1.0"
+name = "openstratos"
+version = "2.0.0-dev"
 authors = ["Razican <razican@protonmail.ch>"]
 
 [features]

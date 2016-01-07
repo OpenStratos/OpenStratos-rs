@@ -4,26 +4,56 @@ extern crate log;
 extern crate fern;
 
 mod threads;
+mod gsm;
 
 use std::result::Result;
 use std::{fs, io};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use gsm::Gsm;
+
 const STATE_FILE: &'static str = "data/last_state.txt";
 
-#[derive(Debug, Clone, Copy)]
+const GSM: Gsm = Gsm;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
     Initializing,
     AcquiringFix,
-    FixAquired,
+    FixAcquired,
     WaitingLaunch,
     GoingUp,
     GoingDown,
     Landed,
     ShutDown,
     SafeMode,
+}
+
+impl State {
+    fn from_str(text: &str) -> State {
+        match text {
+            "Initializing" => State::Initializing,
+            "AcquiringFix" => State::AcquiringFix,
+            "FixAcquired" => State::FixAcquired,
+            "WaitingLaunch" => State::WaitingLaunch,
+            "GoingUp" => State::GoingUp,
+            "GoingDown" => State::GoingDown,
+            "Landed" => State::Landed,
+            "ShutDown" => State::ShutDown,
+            "SafeMode" => State::SafeMode,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn get_last() -> Result<State, io::Error> {
+        let mut f = try!(fs::File::open("foo.txt"));
+        let mut buffer = String::new();
+        try!(f.read_to_string(&mut buffer));
+
+        Ok(State::from_str(buffer.trim()))
+    }
 }
 
 fn main() {
@@ -54,7 +84,8 @@ fn main() {
     }
 }
 
-fn main_logic() {
+/// Main logic of OpenStratos
+pub fn main_logic() {
     check_or_create("data");
     let shared_state = Arc::new(Mutex::new(set_state(State::Initializing).unwrap()));
 
@@ -69,38 +100,12 @@ fn main_logic() {
         println!("[OpenStratos] Starting logger…");
     }
 
-    let log_path = format!("data/logs/main/OpenStratos.{}.log",
-                           time::now_utc()
-                               .strftime("%Y-%m-%d.%H-%M-%S")
-                               .unwrap());
-
-    let logger_config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}",
-                    time::now_utc().strftime("%Y-%m-%d][%H:%M:%S").unwrap(),
-                    level,
-                    msg)
-        }),
-        output: if cfg!(feature = "debug") {
-            vec![fern::OutputConfig::stdout(), fern::OutputConfig::file(&log_path)]
-        } else {
-            vec![fern::OutputConfig::file(&log_path)]
-        },
-        level: if cfg!(feature = "debug") {
-            log::LogLevelFilter::Trace
-        } else {
-            log::LogLevelFilter::Info
-        },
-    };
-
-    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
-        panic!("Failed to initialize global logger: {}", e);
-    }
+    init_logger();
 
     if cfg!(feature = "debug") {
         println!("[OpenStratos] Logger started.");
     }
-    // TODO log the version of OpenStratos
+    info!("OpenStratos {}", env!("CARGO_PKG_VERSION"));
     info!("Logging started.");
 
     debug!("Starting system thread…");
@@ -130,42 +135,39 @@ fn main_logic() {
 
     // TODO main_while(&logger, &state);
 
+    modify_shared_state(State::ShutDown, &shared_state).unwrap();
+
     debug!("Joining threads…");
-    match picture_thread.join() {
-        Ok(_) => trace!("Picture thread joined."),
-        Err(e) => {
-            error!("Picture thread panicked! {:?}", e)
-        }
+    if let Err(e) = picture_thread.join() {
+        error!("Picture thread panicked! {:?}", e)
     }
-    match battery_thread.join() {
-        Ok(_) => trace!("Battery thread joined."),
-        Err(e) => {
-            error!("Battery thread panicked! {:?}", e)
-        }
+    if let Err(e) = battery_thread.join() {
+        error!("Battery thread panicked! {:?}", e)
     }
-    match system_thread.join() {
-        Ok(_) => trace!("System thread joined."),
-        Err(e) => {
-            error!("System thread panicked! {:?}", e)
-        }
+    if let Err(e) = system_thread.join() {
+        error!("System thread panicked! {:?}", e)
     }
     debug!("Threads joined.");
 
     // TODO shut_down(&logger);
 }
 
-fn safe_mode() {
+/// Safe mode of OpenStratos
+pub fn safe_mode() {
     // TODO
+    fs::remove_dir_all("data").unwrap()
 }
 
-fn set_state(state: State) -> Result<State, io::Error> {
+/// Sets the current state of OpenStratos
+pub fn set_state(state: State) -> Result<State, io::Error> {
     let mut f = try!(fs::File::create(STATE_FILE));
     try!(f.write_all(&format!("{:?}", state).into_bytes()[..]));
 
     Ok(state)
 }
 
-fn modify_shared_state(st: State, shared: &Mutex<State>) -> Result<State, io::Error> {
+/// Modifies the shared state
+pub fn modify_shared_state(st: State, shared: &Mutex<State>) -> Result<State, io::Error> {
     match set_state(st) {
         Err(e) => Err(e),
         Ok(st) => {
@@ -173,6 +175,7 @@ fn modify_shared_state(st: State, shared: &Mutex<State>) -> Result<State, io::Er
                 Ok(st) => st,
                 Err(poisoned) => {
                     error!("The state mutex has been poisoned!");
+                    // TODO panic if state is not high enough
                     poisoned.into_inner()
                 },
             };
@@ -184,14 +187,42 @@ fn modify_shared_state(st: State, shared: &Mutex<State>) -> Result<State, io::Er
     }
 }
 
-#[inline]
 fn path_exists(path: &str) -> bool {
     fs::metadata(path).is_ok()
 }
 
-#[inline]
 fn check_or_create(path: &str) {
     if !path_exists(path) {
         fs::create_dir(path).unwrap()
+    }
+}
+
+fn init_logger() {
+    let log_path = format!("data/logs/main/OpenStratos.{}.log",
+                           time::now_utc()
+                               .strftime("%Y-%m-%d.%H-%M-%S")
+                               .unwrap());
+
+    let logger_config = fern::DispatchConfig {
+        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+            format!("[{}][{}] {}",
+                    time::now_utc().strftime("%Y-%m-%d][%H:%M:%S").unwrap(),
+                    level,
+                    msg)
+        }),
+        output: if cfg!(feature = "debug") {
+            vec![fern::OutputConfig::stdout(), fern::OutputConfig::file(&log_path)]
+        } else {
+            vec![fern::OutputConfig::file(&log_path)]
+        },
+        level: if cfg!(feature = "debug") {
+            log::LogLevelFilter::Trace
+        } else {
+            log::LogLevelFilter::Info
+        },
+    };
+
+    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
+        panic!("Failed to initialize global logger: {}", e);
     }
 }
