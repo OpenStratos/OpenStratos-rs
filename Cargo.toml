@@ -4,13 +4,15 @@ version = "2.0.0-dev"
 authors = ["Razican <razican@protonmail.ch>"]
 
 [features]
-default = ["power-off"]
+default = ["power-off", "sms"]
 power-off = []
 debug = []
 sim = []
 real-sim = []
+sms = []
 
 [dependencies]
 time = "0.1"
 log = "0.3"
 fern = "0.3"
+serial = "0.3"

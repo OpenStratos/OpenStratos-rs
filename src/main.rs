@@ -2,6 +2,7 @@ extern crate time;
 #[macro_use]
 extern crate log;
 extern crate fern;
+extern crate serial;
 
 mod threads;
 mod gsm;
@@ -15,8 +16,6 @@ use std::thread;
 use gsm::Gsm;
 
 const STATE_FILE: &'static str = "data/last_state.txt";
-
-const GSM: Gsm = Gsm;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
@@ -117,10 +116,15 @@ pub fn main_logic() {
 
     // TODO initialize(&logger, now);
 
+    // TODO from initialize?
+    // TODO better error handling
+    let shared_gsm = Arc::new(Gsm::initialize().unwrap());
+
     debug!("Starting battery thread…");
     let battery_state = shared_state.clone();
+    let gsm = shared_gsm.clone();
     let battery_thread = thread::spawn(move || {
-        threads::battery(&battery_state);
+        threads::battery(&battery_state, &gsm);
     });
     debug!("Battery thread started.");
 

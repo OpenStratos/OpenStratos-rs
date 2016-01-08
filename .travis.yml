@@ -30,7 +30,7 @@ script:
       travis-cargo test &&
       travis-cargo --only stable doc
 after_success:
-  - travis-cargo --only stable doc-upload --branch=develop
+  - travis-cargo --only stable doc-upload --branch develop
   - travis-cargo coveralls --no-sudo --verify
 
 env:

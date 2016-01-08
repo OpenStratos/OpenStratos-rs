@@ -1,5 +1,6 @@
 use State;
-use GSM;
+
+use gsm::Gsm;
 
 use std::thread;
 use std::sync::Mutex;
@@ -18,7 +19,7 @@ pub fn system(state: &Mutex<State>) {
     println!("State: '{:?}'", *state);
 }
 
-pub fn battery(state: &Mutex<State>) {
+pub fn battery(state: &Mutex<State>, gsm: &Gsm) {
     let log_path = format!("data/logs/GSM/Battery.{}.log",
                            time::now_utc()
                                .strftime("%Y-%m-%d.%H-%M-%S")
@@ -43,21 +44,21 @@ pub fn battery(state: &Mutex<State>) {
         *state != State::ShutDown
     } {
         // TODO better error handling
-        if GSM.is_on().unwrap() {
-            let (main_battery, gsm_battery) = GSM.get_battery_status().unwrap();
+        if gsm.is_on().unwrap() {
+            let (main_battery, gsm_battery) = gsm.get_battery_status().unwrap();
             // logger.log(format!("[MAIN] {}", main_battery), Info);
             // logger.log(format!("[GSM] {}", gsm_battery).as_ref(),
             //            &Info,
             //            _);
         } else {
             thread::sleep(Duration::from_secs(15 * 60));
-            GSM.turn_on();
+            gsm.turn_on();
 
-            let (main_battery, gsm_battery) = GSM.get_battery_status().unwrap();
+            let (main_battery, gsm_battery) = gsm.get_battery_status().unwrap();
             // logger.log(format!("[MAIN] {}", main_battery), Info);
             // logger.log(format!("[GSM] {}", gsm_battery), Info);
 
-            GSM.turn_off();
+            gsm.turn_off();
         }
 
         thread::sleep(Duration::from_secs(3 * 30));
