@@ -15,4 +15,9 @@ sms = []
 time = "0.1"
 log = "0.3"
 fern = "0.3"
-serial = "0.3"
+serial = { git = "https://github.com/OpenStratos/serial-rs.git" }
+wiringpi = { git = "https://github.com/Ogeon/rust-wiringpi.git" }
+
+[target.arm-unknown-linux-gnueabihf]
+ar = "arm-linux-gnueabihf-gcc-ar"
+linker = "gcc-sysroot"

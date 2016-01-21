@@ -3,9 +3,11 @@ extern crate time;
 extern crate log;
 extern crate fern;
 extern crate serial;
+extern crate wiringpi;
 
 mod threads;
 mod gsm;
+mod logger;
 
 use std::result::Result;
 use std::{fs, io};
@@ -118,7 +120,8 @@ pub fn main_logic() {
 
     // TODO from initialize?
     // TODO better error handling
-    let shared_gsm = Arc::new(Gsm::initialize().unwrap());
+    let wiring_pi = wiringpi::setup();
+    let shared_gsm = Arc::new(Mutex::new(Gsm::initialize(&wiring_pi).unwrap()));
 
     debug!("Starting battery thread…");
     let battery_state = shared_state.clone();
@@ -204,15 +207,13 @@ fn check_or_create(path: &str) {
 fn init_logger() {
     let log_path = format!("data/logs/main/OpenStratos.{}.log",
                            time::now_utc()
-                               .strftime("%Y-%m-%d.%H-%M-%S")
+                               .strftime("%F.%H-%M-%S")
                                .unwrap());
 
     let logger_config = fern::DispatchConfig {
         format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}",
-                    time::now_utc().strftime("%Y-%m-%d][%H:%M:%S").unwrap(),
-                    level,
-                    msg)
+            format!("[OpenStratos][{}] - {} - {}",
+                    level, time::now_utc().strftime("%D %T.%f").unwrap(), msg)
         }),
         output: if cfg!(feature = "debug") {
             vec![fern::OutputConfig::stdout(), fern::OutputConfig::file(&log_path)]
