@@ -1,5 +1,10 @@
 set -ex
 
+mkdir -p .cargo
+echo "[target.arm-unknown-linux-gnueabihf]" >> .cargo/config
+echo "ar = \"arm-linux-gnueabihf-gcc-ar\"" >> .cargo/config
+echo "linker = \"arm-linux-gnueabihf-gcc\"" >> .cargo/config
+
 dir=rust-std-$TARGET
 pkg=rust-std
 
