@@ -3,12 +3,10 @@ use State;
 use gsm::Gsm;
 use logger::Logger;
 
-use std::{fs, thread};
-use std::io::Write;
+use std::thread;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use time;
 use log::LogLevel;
 
 pub fn system(state: &Mutex<State>) {

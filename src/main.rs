@@ -184,7 +184,7 @@ pub fn modify_shared_state(st: State, shared: &Mutex<State>) -> Result<State, io
                     error!("The state mutex has been poisoned!");
                     // TODO panic if state is not high enough
                     poisoned.into_inner()
-                },
+                }
             };
             *state = st;
             info!("State changed to {:?}.", st);
@@ -213,7 +213,9 @@ fn init_logger() {
     let logger_config = fern::DispatchConfig {
         format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
             format!("[OpenStratos][{}] - {} - {}",
-                    level, time::now_utc().strftime("%D %T.%f").unwrap(), msg)
+                    level,
+                    time::now_utc().strftime("%D %T.%f").unwrap(),
+                    msg)
         }),
         output: if cfg!(feature = "debug") {
             vec![fern::OutputConfig::stdout(), fern::OutputConfig::file(&log_path)]
