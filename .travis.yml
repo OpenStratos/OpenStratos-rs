@@ -3,7 +3,7 @@ sudo: required
 dist: trusty
 rust:
   - 1.5.0
-  - stable
+  - 1.6.0
   - beta
   - nightly
 install:
@@ -12,5 +12,5 @@ install:
 before_script:
     - sh prepare-script.sh
 script:
-  - cargo build --target $TARGET
-  - qemu-arm -L /usr/arm-linux-gnueabihf target/$TARGET/debug/openstratos-test
+  - cargo build --target arm-unknown-linux-gnueabihf
+  - qemu-arm -L /usr/arm-linux-gnueabihf target/arm-unknown-linux-gnueabihf/debug/openstratos-*
