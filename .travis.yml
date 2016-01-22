@@ -13,4 +13,7 @@ before_script:
     - sh prepare-script.sh
 script:
   - cargo build --target arm-unknown-linux-gnueabihf
-  - qemu-arm -L /usr/arm-linux-gnueabihf cargo test
+  - cargo build --target arm-unknown-linux-gnueabihf --features="debug"
+  - cargo build --target arm-unknown-linux-gnueabihf --no-default-features --features="debug"
+  - cargo build --target arm-unknown-linux-gnueabihf --features="debug sim"
+  # Still testing left, maybe we should run a simple script
