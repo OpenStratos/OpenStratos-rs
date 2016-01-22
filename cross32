@@ -2,8 +2,8 @@
 
 rust=$2
 tools=$3
-: ${rust:="$HOME/workspace/pi-rust"}
-: ${tools:="$HOME/workspace/pi-tools"}
+: ${rust:="$HOME/pi-rust"}
+: ${tools:="$HOME/pi-tools"}
 
 export SYSROOT="$tools/arm-bcm2708/arm-bcm2708hardfp-linux-gnueabi/arm-bcm2708hardfp-linux-gnueabi/sysroot"
 
