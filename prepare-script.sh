@@ -1,3 +1,5 @@
+set -ex
+
 dir=rust-std-$TARGET
 pkg=rust-std
 
