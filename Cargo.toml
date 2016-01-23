@@ -15,5 +15,5 @@ sms = []
 time = "0.1"
 log = "0.3"
 fern = "0.3"
-serial = { git = "https://github.com/OpenStratos/serial-rs.git" }
+serial = "0.3"
 wiringpi = { git = "https://github.com/Ogeon/rust-wiringpi.git" }
