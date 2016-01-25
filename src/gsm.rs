@@ -13,6 +13,10 @@ use serial::posix::TTYPort;
 use wiringpi::pin::{InputPin, OutputPin, Value};
 
 const GSM_SERIAL: &'static str = "/dev/ttyUSB0";
+const GSM_MAX_BAT: f64 = 4.2;
+const GSM_MIN_BAT: f64 = 3.7;
+const MAIN_MAX_BAT: f64 = 8.4 * 2660f64 / (2660 + 7420) as f64; // Measured Ohms in voltage divider
+const MAIN_MIN_BAT: f64 = 7.4 * MAIN_MAX_BAT / 8.4;
 
 pub struct Gsm {
     serial: BufReader<TTYPort>,
@@ -82,7 +86,7 @@ impl Gsm {
 
     pub fn send_sms(&mut self, message: String, number: String) -> Result<(), io::Error> {
         if self.is_on() {
-            self.logger.log(&format!("Sending SMS: \"{}\" ({} characters) to number \"{}\".",
+            self.logger.log(&format!("Sending SMS: \"{}\" ({} characters) to number \"{}\"…",
                                      message,
                                      message.len(),
                                      number),
@@ -94,6 +98,7 @@ impl Gsm {
 
             if cfg!(feature = "sms") {
                 if try!(self.send_command_read("AT+CMGF=1"))[1] != "OK" {
+                    // TODO check bounds
                     self.logger.log("No OK received sending SMS on 'AT+CMGD=1' response.", Error);
                     return Err(io::Error::new(io::ErrorKind::Other,
                                               "no OK received on 'AT+CMGD=1' response"));
@@ -122,6 +127,7 @@ impl Gsm {
                     }
                 }
 
+                // Read +CMGS response
                 try!(self.serial.read_line(&mut response));
                 self.command_logger.log(&format!("Received: '{}'", response.trim()), Info);
                 if !response.contains("+CMGS") {
@@ -152,9 +158,76 @@ impl Gsm {
         }
     }
 
-    pub fn get_battery_status(&self) -> Result<(f64, f64), io::Error> {
-        // TODO
-        Ok((0f64, 0f64))
+    pub fn get_battery_status(&mut self) -> Result<(f64, f64), io::Error> {
+        self.logger.log("Checking Battery status…", Info);
+        if self.is_on() {
+            let gsm_response = try!(self.send_command_read("AT+CBC"));
+            let adc_response = try!(self.send_command_read("AT+CADC?"));
+
+            if gsm_response.len() < 2 || adc_response.len() < 2 {
+                self.logger.log("No response received when reading battery values.", Error);
+                return Err(io::Error::new(io::ErrorKind::Other, "no response received"));
+            }
+
+            let mut response_found = false;
+            let mut gsm_response_str = String::new();
+            for line in gsm_response {
+                if line.contains("+CBC:") {
+                    response_found = true;
+                    gsm_response_str = line;
+                }
+            }
+
+            if response_found {
+                let mut response_found = false;
+                let mut adc_response_str = String::new();
+                for line in adc_response {
+                    if line.contains("+CADC:") {
+                        response_found = true;
+                        adc_response_str = line;
+                    }
+                }
+
+                if response_found {
+                    let gsm_response: Vec<&str> = gsm_response_str.split(",").collect();
+                    let adc_response: Vec<&str> = adc_response_str.split(",").collect();
+
+                    let gsm_voltage = match gsm_response[2].parse::<f64>() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            self.logger
+                                .log(&format!("Invalid ADC battery check response: {:?}", e),
+                                     Error);
+                            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                                      format!("invalid response received: {:?}",
+                                                              e)));
+                        }
+                    };
+                    let adc_voltage = match adc_response[1].parse::<f64>() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            self.logger
+                                .log(&format!("Invalid ADC battery check response: {:?}", e),
+                                     Error);
+                            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                                      format!("invalid response received: {:?}",
+                                                              e)));
+                        }
+                    };
+
+                    Ok(((gsm_voltage / 1000.0 - GSM_MIN_BAT) / (GSM_MAX_BAT - GSM_MIN_BAT),
+                        (adc_voltage / 1000.0 - MAIN_MIN_BAT) / (MAIN_MAX_BAT - MAIN_MIN_BAT)))
+                } else {
+                    self.logger.log("Invalid ADC battery check response.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other, "invalid response received"));
+                }
+            } else {
+                self.logger.log("Invalid GSM battery check response.", Error);
+                return Err(io::Error::new(io::ErrorKind::Other, "invalid response received"));
+            }
+        } else {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "GSM is off"))
+        }
     }
 
     pub fn get_location(&self) -> Result<(f64, f64), io::Error> {
