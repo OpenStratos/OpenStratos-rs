@@ -5,11 +5,11 @@ extern crate fern;
 extern crate serial;
 extern crate wiringpi;
 
-pub mod threads;
-pub mod gsm;
-pub mod logger;
-pub mod utils;
-pub mod logic;
+mod threads;
+mod gsm;
+mod logger;
+mod utils;
+mod logic;
 
 use std::result::Result;
 use std::{fs, io};
@@ -85,6 +85,21 @@ impl State {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Coordinates {
+    latitude: f64,
+    longitude: f64,
+}
+
+impl Coordinates {
+    pub fn new(latitude: f64, longitude: f64) -> Coordinates {
+        Coordinates {latitude: latitude, longitude: longitude}
+    }
+
+    pub fn get_latitude(&self) -> f64 {self.latitude}
+    pub fn get_longitude(&self) -> f64 {self.longitude}
 }
 
 fn main() {

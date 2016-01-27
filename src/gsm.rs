@@ -6,6 +6,7 @@ use wiringpi;
 use serial;
 use time;
 use log::LogLevel::*;
+use Coordinates;
 
 use logger::Logger;
 
@@ -17,6 +18,7 @@ const GSM_MAX_BAT: f64 = 4.2;
 const GSM_MIN_BAT: f64 = 3.7;
 const MAIN_MAX_BAT: f64 = 8.4 * 2660f64 / (2660 + 7420) as f64; // Measured Ohms in voltage divider
 const MAIN_MIN_BAT: f64 = 7.4 * MAIN_MAX_BAT / 8.4;
+const GSM_LOC_SERV: &'static str = "gprs-service.com";
 
 pub struct Gsm {
     serial: BufReader<TTYPort>,
@@ -45,9 +47,9 @@ impl Gsm {
     pub fn has_connectivity(&mut self) -> Result<bool, io::Error> {
         if self.is_on() {
             let response = try!(self.send_command_read("AT+CREG?"));
-            Ok(response[1] == "+CREG: 0,1" || response[1] == "+CREG: 0,5")
+            Ok(response.len() >= 2 && (response[1] == "+CREG: 0,1" || response[1] == "+CREG: 0,5"))
         } else {
-            error!("Trying to check GSM connectivity, but GSM was off!");
+            error!("Trying to check GSM connectivity, but GSM was off.");
             Err(io::Error::new(io::ErrorKind::BrokenPipe, "GSM is off"))
         }
     }
@@ -56,7 +58,7 @@ impl Gsm {
         self.logger.log("Turning GSM on…", Info);
 
         if self.is_on() {
-            warn!("Trying to turn GSM on, but GSM was already on!");
+            warn!("Trying to turn GSM on, but GSM was already on.");
             self.logger.log("GSM on.", Info);
         } else {
             self.power_pin.digital_write(Value::Low);
@@ -72,7 +74,7 @@ impl Gsm {
         self.logger.log("Turning GSM off…", Info);
 
         if self.is_on() {
-            warn!("Trying to turn GSM off, but GSM was already off!");
+            warn!("Trying to turn GSM off, but GSM was already off.");
             self.logger.log("GSM off.", Info);
         } else {
             self.power_pin.digital_write(Value::Low);
@@ -85,26 +87,28 @@ impl Gsm {
     }
 
     pub fn send_sms(&mut self, message: String, number: String) -> Result<(), io::Error> {
+        self.logger.log(&format!("Sending SMS: \"{}\" ({} characters) to number \"{}\"…",
+                                 message,
+                                 message.len(),
+                                 number),
+                        Info);
         if self.is_on() {
-            self.logger.log(&format!("Sending SMS: \"{}\" ({} characters) to number \"{}\"…",
-                                     message,
-                                     message.len(),
-                                     number),
-                            Info);
             if message.len() > 160 {
                 self.logger.log("Trying to send SMS longer than 160 characters!", Error);
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "message too long"));
             }
 
             if cfg!(feature = "sms") {
-                if try!(self.send_command_read("AT+CMGF=1"))[1] != "OK" {
-                    // TODO check bounds
-                    self.logger.log("No OK received sending SMS on 'AT+CMGD=1' response.", Error);
+                let response = try!(self.send_command_read("AT+CMGF=1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("No 'OK' received sending SMS on 'AT+CMGF=1' response.",
+                                    Error);
                     return Err(io::Error::new(io::ErrorKind::Other,
-                                              "no OK received on 'AT+CMGD=1' response"));
+                                              "no 'OK' received on 'AT+CMGF=1' response"));
                 }
 
-                if try!(self.send_command_read(&format!("AT+CMGS=\"{}\"", number)))[1] != "> " {
+                let response = try!(self.send_command_read(&format!("AT+CMGS=\"{}\"", number)));
+                if response.len() < 2 || response[1] != "> " {
                     self.logger.log("No prompt received sending SMS on 'AT+CMGS' response.",
                                     Error);
                     return Err(io::Error::new(io::ErrorKind::Other,
@@ -154,6 +158,7 @@ impl Gsm {
 
             Ok(())
         } else {
+            error!("Trying to send SMS, but GSM was off.");
             Err(io::Error::new(io::ErrorKind::BrokenPipe, "GSM is off"))
         }
     }
@@ -192,6 +197,13 @@ impl Gsm {
                     let gsm_response: Vec<&str> = gsm_response_str.split(",").collect();
                     let adc_response: Vec<&str> = adc_response_str.split(",").collect();
 
+                    if gsm_response.len() < 3 || adc_response.len() < 2 {
+                        self.logger
+                            .log("Invalid battery check response.", Error);
+                        return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                                  "invalid battery check response"));
+                    }
+
                     let gsm_voltage = match gsm_response[2].parse::<f64>() {
                         Ok(v) => v,
                         Err(e) => {
@@ -226,13 +238,168 @@ impl Gsm {
                 return Err(io::Error::new(io::ErrorKind::Other, "invalid response received"));
             }
         } else {
+            error!("Trying to check batteries, but GSM was off.");
             Err(io::Error::new(io::ErrorKind::BrokenPipe, "GSM is off"))
         }
     }
 
-    pub fn get_location(&self) -> Result<(f64, f64), io::Error> {
-        // TODO
-        Ok((0f64, 0f64))
+    pub fn get_coordinates(&mut self) -> Result<Coordinates, io::Error> {
+        self.logger.log("Checking Battery status…", Info);
+        if self.is_on() {
+            let response = try!(self.send_command_read("AT+CMGF=1"));
+            if response.len() < 2 || response[1] != "OK" {
+                self.logger.log("No OK received getting location on 'AT+CMGF=1' response.",
+                                Error);
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "no OK received on 'AT+CMGF=1' response"));
+            }
+
+            let response = try!(self.send_command_read("AT+CGATT=1"));
+            if response.len() < 2 || response[1] != "OK" {
+                self.logger.log("No OK received getting location on 'AT+CGATT=1' response.",
+                                Error);
+
+                let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("Error turning GPRS down.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other,
+                                              "error turning GPRS down after not receiving OK \
+                                               on AT+SAPBR=0,1 response"));
+                }
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "no OK received on 'AT+SAPBR=0,1' response"));
+            }
+
+            let response = try!(self.send_command_read("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\""));
+            if response.len() < 2 || response[1] != "OK" {
+                self.logger
+                    .log("No OK received getting location on 'AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"' \
+                          response.",
+                         Error);
+                let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("Error turning GPRS down.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other,
+                                              "error turning GPRS down after not receiving OK \
+                                               on AT+SAPBR=0,1 response"));
+                }
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "no OK received on \
+                                           'AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"' response"));
+            }
+            let response = try!(self.send_command_read(&format!("AT+SAPBR=3,1,\"APN\",\"{}\"",
+                                                                GSM_LOC_SERV)));
+            if response.len() < 2 || response[1] != "OK" {
+                self.logger
+                    .log(&format!("No OK received getting location on \
+                                   'AT+SAPBR=3,1,\"APN\",\"{}\"' response.",
+                                  GSM_LOC_SERV),
+                         Error);
+                let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("Error turning GPRS down.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other,
+                                              format!("error turning GPRS down after no OK \
+                                                       received on \
+                                                       'AT+SAPBR=3,1,\"APN\",\"{}\"' response.",
+                                                      GSM_LOC_SERV)));
+                }
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          format!("no OK received on \
+                                                   'AT+SAPBR=3,1,\"APN\",\"{}\"' response",
+                                                  GSM_LOC_SERV)));
+            }
+
+            try!(writeln!(self.serial.get_mut(), "AT+SAPBR=1,1"));
+            self.command_logger.log("Sent: 'AT+SAPBR=1,1'", Info);
+
+            let start = time::precise_time_s();
+            let mut response = String::new();
+            while time::precise_time_s() - start < 2f64 {
+                if try!(self.serial.read_line(&mut response)) != 0 {
+                    break;
+                }
+            }
+            try!(self.serial.read_line(&mut response));
+            self.command_logger.log(&format!("Received: '{}'", response.trim()), Info);
+
+            if response != "OK" {
+                self.logger
+                    .log("No OK received getting location on 'AT+SAPBR=1,1' response.",
+                         Error);
+                let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("Error turning GPRS down.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other,
+                                              "error turning GPRS down after no OK received on \
+                                               'AT+SAPBR=1,1' response."));
+                }
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "no OK received on 'AT+SAPBR=1,1' response"));
+            }
+
+            try!(writeln!(self.serial.get_mut(), "AT+CIPGSMLOC=1,1"));
+            self.command_logger.log("Sent: 'AT+CIPGSMLOC=1,1'", Info);
+
+            let start = time::precise_time_s();
+            let mut response = String::new();
+            while time::precise_time_s() - start < 10f64 {
+                if try!(self.serial.read_line(&mut response)) != 0 {
+                    break;
+                }
+            }
+            try!(self.serial.read_line(&mut response));
+            self.command_logger.log(&format!("Received: '{}'", response.trim()), Info);
+
+            let mut ok = String::new();
+            try!(self.serial.read_line(&mut ok));
+
+            let response: Vec<&str> = response.split(",").collect();
+            if response.len() < 3 || ok != "OK" {
+                self.logger
+                    .log("Bad response getting location on 'AT+CIPGSMLOC=1,1' response.",
+                         Error);
+                let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+                if response.len() < 2 || response[1] != "OK" {
+                    self.logger.log("Error turning GPRS down.", Error);
+                    return Err(io::Error::new(io::ErrorKind::Other,
+                                              "error turning GPRS down after bad response \
+                                               received on 'AT+CIPGSMLOC=1,1' response."));
+                }
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "bad response getting location on 'AT+CIPGSMLOC=1,1' \
+                                           response"));
+            }
+
+            let latitude = match response[2].parse::<f64>() {
+                Ok(v) => v,
+                Err(e) => {
+                    self.logger
+                        .log(&format!("Invalid location response: {:?}", e), Error);
+                    return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                              format!("invalid response received: {:?}", e)));
+                }
+            };
+            let longitude = match response[1].parse::<f64>() {
+                Ok(v) => v,
+                Err(e) => {
+                    self.logger
+                        .log(&format!("Invalid location response: {:?}", e), Error);
+                    return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                              format!("invalid response received: {:?}", e)));
+                }
+            };
+
+            let response = try!(self.send_command_read("AT+SAPBR=0,1"));
+            if response.len() < 2 || response[1] != "OK" {
+                self.logger.log("Error turning GPRS down after reading location.", Error);
+            }
+
+            Ok(Coordinates::new(latitude, longitude))
+        } else {
+            error!("Trying to get GSM location, but GSM was off.");
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "GSM is off"))
+        }
     }
 
     fn send_command_read(&mut self, command: &str) -> Result<Vec<String>, io::Error> {
