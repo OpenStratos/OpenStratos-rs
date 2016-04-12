@@ -34,7 +34,9 @@ impl Gsm {
         Ok(Gsm {
             serial: BufReader::new(try!(serial::open(GSM_SERIAL))),
             logger: try!(Logger::new("data/logs/GSM", "GSM", "GSM")),
-            command_logger: try!(Logger::new("data/logs/GSMCommands", "GSMCommands", "GSMCommands")),
+            command_logger: try!(Logger::new("data/logs/GSMCommands",
+                                             "GSMCommands",
+                                             "GSMCommands")),
             power_pin: wiring_pi.output_pin(7),
             status_pin: wiring_pi.input_pin(21),
         })

@@ -12,13 +12,72 @@ mod utils;
 mod logic;
 
 use std::result::Result;
-use std::{fs, io};
+use std::str::FromStr;
+use std::error::Error as StdError;
+use std::{fs, io, fmt};
 use std::io::{Read, Write};
 use std::sync::Mutex;
 
 use logic::*;
 
 const STATE_FILE: &'static str = "data/last_state.txt";
+
+#[derive(Debug)]
+pub enum Error {
+    ParseStateError(ParseStateError),
+    IOError(io::Error),
+}
+
+impl From<ParseStateError> for Error {
+    fn from(e: ParseStateError) -> Error {
+        Error::ParseStateError(e)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Error {
+        Error::IOError(e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        match self {
+            &Error::ParseStateError(ref e) => e.description(),
+            &Error::IOError(ref e) => e.description(),
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct ParseStateError {
+    description: String,
+}
+
+impl ParseStateError {
+    fn new(s: &str) -> ParseStateError {
+        ParseStateError { description: format!("Could not parse {} as a valid State", s) }
+    }
+}
+
+impl fmt::Display for ParseStateError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description)
+    }
+}
+
+impl StdError for ParseStateError {
+    fn description(&self) -> &str {
+        self.description.as_ref()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -34,27 +93,12 @@ pub enum State {
 }
 
 impl State {
-    fn from_str(text: &str) -> State {
-        match text {
-            "Initializing" => State::Initializing,
-            "AcquiringFix" => State::AcquiringFix,
-            "FixAcquired" => State::FixAcquired,
-            "WaitingLaunch" => State::WaitingLaunch,
-            "GoingUp" => State::GoingUp,
-            "GoingDown" => State::GoingDown,
-            "Landed" => State::Landed,
-            "ShutDown" => State::ShutDown,
-            "SafeMode" => State::SafeMode,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn get_last() -> Result<State, io::Error> {
+    pub fn get_last() -> Result<State, Error> {
         let mut f = try!(fs::File::open("foo.txt"));
         let mut buffer = String::new();
         try!(f.read_to_string(&mut buffer));
 
-        Ok(State::from_str(buffer.trim()))
+        Ok(try!(State::from_str(buffer.trim())))
     }
 
     /// Sets the current state of OpenStratos
@@ -87,6 +131,24 @@ impl State {
     }
 }
 
+impl FromStr for State {
+    type Err = ParseStateError;
+    fn from_str(s: &str) -> Result<State, ParseStateError> {
+        match s {
+            "Initializing" => Ok(State::Initializing),
+            "AcquiringFix" => Ok(State::AcquiringFix),
+            "FixAcquired" => Ok(State::FixAcquired),
+            "WaitingLaunch" => Ok(State::WaitingLaunch),
+            "GoingUp" => Ok(State::GoingUp),
+            "GoingDown" => Ok(State::GoingDown),
+            "Landed" => Ok(State::Landed),
+            "ShutDown" => Ok(State::ShutDown),
+            "SafeMode" => Ok(State::SafeMode),
+            _ => Err(ParseStateError::new(s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Coordinates {
     latitude: f64,
@@ -95,11 +157,18 @@ pub struct Coordinates {
 
 impl Coordinates {
     pub fn new(latitude: f64, longitude: f64) -> Coordinates {
-        Coordinates {latitude: latitude, longitude: longitude}
+        Coordinates {
+            latitude: latitude,
+            longitude: longitude,
+        }
     }
 
-    pub fn get_latitude(&self) -> f64 {self.latitude}
-    pub fn get_longitude(&self) -> f64 {self.longitude}
+    pub fn get_latitude(&self) -> f64 {
+        self.latitude
+    }
+    pub fn get_longitude(&self) -> f64 {
+        self.longitude
+    }
 }
 
 fn main() {

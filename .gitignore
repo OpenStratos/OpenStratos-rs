@@ -1,2 +1,4 @@
 target
 data
+Cargo.lock
+src/*.bk
