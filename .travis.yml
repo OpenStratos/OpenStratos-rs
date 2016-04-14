@@ -1,16 +1,24 @@
 language: rust
-sudo: required
+sudo: false
 dist: trusty
+addons:
+  apt:
+    packages:
+      - gcc-arm-linux-gnueabihf
+      - qemu-user
+
+# run builds for all the trains
 rust:
-  - 1.6.0
-  - 1.7.0
-  - beta
   - nightly
-install:
-  - sudo apt-get update
-  - sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
+  - beta
+  - 1.8.0
+  - 1.7.0
+  - 1.6.0
+
 before_script:
   - sh prepare-script.sh
+
+# the main build
 script:
   - cargo build --target arm-unknown-linux-gnueabihf
   - cargo build --target arm-unknown-linux-gnueabihf --features="debug"
