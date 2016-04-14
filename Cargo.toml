@@ -12,8 +12,8 @@ real-sim = []
 sms = []
 
 [dependencies]
-time = "0.1"
-log = "0.3"
-fern = "0.3"
-serial = "0.3"
-wiringpi = { git = "https://github.com/Ogeon/rust-wiringpi.git" }
+time = "^0.1"
+log = "^0.3"
+fern = "^0.3"
+serial = "^0.3"
+wiringpi = "^0.1"
