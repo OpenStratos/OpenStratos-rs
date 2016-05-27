@@ -29,10 +29,6 @@ install:
   - export PATH="$HOME/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin":$PATH
   - export CC="$HOME/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/gcc-sysroot"
   - export AR="$HOME/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-ar"
-  - echo "SYSROOT: "$SYSROOT
-  - echo "PATH: "$PATH
-  - echo "CC: "$CC
-  - echo "AR: "$AR
 
 # the main build
 script:
