@@ -28,11 +28,11 @@ install:
 
 # the main build
 script:
-  - cargo build --target arm-unknown-linux-gnueabihf
-  - cargo build --target arm-unknown-linux-gnueabihf --features="debug"
-  - cargo build --target arm-unknown-linux-gnueabihf --no-default-features --features="debug"
-  - cargo build --target arm-unknown-linux-gnueabihf --features="debug sim"
-  - cargo build --target arm-unknown-linux-gnueabihf --features="debug real-sim"
-  - cargo build --target arm-unknown-linux-gnueabihf --features="sim"
-  - cargo build --target arm-unknown-linux-gnueabihf --features="real-sim"
+  - ./cross64 "build -v"
+  - ./cross64 "build -v --features=\"debug\""
+  - ./cross64 "build -v --no-default-features --features=\"debug\""
+  - ./cross64 "build -v --features=\"debug sim\""
+  - ./cross64 "build -v --features=\"debug real-sim\""
+  - ./cross64 "build -v --features=\"sim\""
+  - ./cross64 "build -v --features=\"real-sim\""
   # Still testing left, maybe we should run a simple script
