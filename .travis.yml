@@ -25,14 +25,18 @@ install:
   - git clone https://github.com/raspberrypi/tools.git ~/pi-tools
   - cp scripts/gcc-sysroot ~/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin
   - chmod +x ~/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/gcc-sysroot
+  - export SYSROOT="$tools/arm-bcm2708/arm-bcm2708hardfp-linux-gnueabi/arm-bcm2708hardfp-linux-gnueabi/sysroot"
+  - export PATH="$tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin":$PATH
+  - export CC="$tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/gcc-sysroot"
+  - export AR="$tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-ar"
 
 # the main build
 script:
-  - ./cross64 "build -v"
-  - ./cross64 "build -v --features=\"debug\""
-  - ./cross64 "build -v --no-default-features --features=\"debug\""
-  - ./cross64 "build -v --features=\"debug sim\""
-  - ./cross64 "build -v --features=\"debug real-sim\""
-  - ./cross64 "build -v --features=\"sim\""
-  - ./cross64 "build -v --features=\"real-sim\""
+  - cargo build --target arm-unknown-linux-gnueabihf
+  - cargo build --target arm-unknown-linux-gnueabihf --features="debug"
+  - cargo build --target arm-unknown-linux-gnueabihf --no-default-features --features="debug"
+  - cargo build --target arm-unknown-linux-gnueabihf --features="debug sim"
+  - cargo build --target arm-unknown-linux-gnueabihf --features="debug real-sim"
+  - cargo build --target arm-unknown-linux-gnueabihf --features="sim"
+  - cargo build --target arm-unknown-linux-gnueabihf --features="real-sim"
   # Still testing left, maybe we should run a simple script
