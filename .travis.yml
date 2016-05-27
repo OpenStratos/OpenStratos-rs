@@ -1,22 +1,30 @@
-language: rust
-sudo: false
+language: generic
+os:
+  - linux
 dist: trusty
-addons:
-  apt:
-    packages:
-      - gcc-arm-linux-gnueabihf
-      - qemu-user
+sudo: false
 
 # run builds for all the trains
 rust:
   - nightly
   - beta
+  - stable
+  - 1.9.0
   - 1.8.0
-  - 1.7.0
-  - 1.6.0
 
-before_script:
-  - sh prepare-script.sh
+# Install rust
+install:
+  - curl https://sh.rustup.rs -sSf | sh -s -- -y
+  - export PATH="$HOME/.cargo/bin:$PATH"
+  - rustup toolchain install $RUST
+  - rustup default $RUST
+  - rustup target add arm-unknown-linux-gnueabihf
+  - rustc -V
+  - cargo -V
+  - cp scripts/config ~/.cargo/config
+  - git clone https://github.com/raspberrypi/tools.git ~/pi-tools
+  - cp scripts/gcc-sysroot ~/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin
+  - chmod +x ~/pi-tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/gcc-sysroot
 
 # the main build
 script:

@@ -75,7 +75,7 @@ impl fmt::Display for ParseStateError {
 
 impl StdError for ParseStateError {
     fn description(&self) -> &str {
-        self.description.as_ref()
+        self.description.as_str()
     }
 }
 
