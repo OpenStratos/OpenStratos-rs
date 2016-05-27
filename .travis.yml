@@ -4,13 +4,13 @@ os:
 dist: trusty
 sudo: false
 
-# run builds for all the trains
-rust:
-  - nightly
-  - beta
-  - stable
-  - 1.9.0
-  - 1.8.0
+# Build for all chains since Rust 1.8.0 (not available for prior versions)
+env:
+  - RUST=nightly
+  - RUST=beta
+  - RUST=stable
+  - RUST=1.9.0
+  - RUST=1.8.0
 
 # Install rust
 install:
